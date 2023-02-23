@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gocent/mongodb-anonymizer/config"
 
 	"github.com/go-faker/faker/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,11 +13,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 ) // import the faker package
 
-const uri = "mongodb://127.0.0.1:27017"
-
 func main() {
 	fmt.Println("Hello " + faker.Name())
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(config.GetEnv().DB.SourceURI.String()))
 	if err != nil {
 		panic(err)
 	}
@@ -30,23 +29,24 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("Successfully connected and pinged.")
+	fmt.Println("Collections: ", config.GetEnv().DB.Collections)
+	for _, collection := range config.GetEnv().DB.Collections {
+		cursor, err := client.Database(config.GetEnv().DB.SourceName).Collection(collection).Find(context.TODO(), bson.M{})
+		if err != nil {
+			panic(err)
+		}
 
-	cursor, err := client.Database("anonymize").Collection("test").Find(context.TODO(), bson.M{})
+		var results []interface{}
 
-	if err != nil {
-		panic(err)
-	}
+		if err = cursor.All(context.TODO(), &results); err != nil {
+			panic(err)
+		}
 
-	var results []interface{}
-
-	if err = cursor.All(context.TODO(), &results); err != nil {
-		panic(err)
-	}
-
-	for _, result := range results {
-		res, _ := json.Marshal(result)
-		replaceAllProperties(res)
-		fmt.Println(string(res))
+		for _, result := range results {
+			res, _ := json.Marshal(result)
+			replaceAllProperties(res)
+			fmt.Println(string(res))
+		}
 	}
 }
 
